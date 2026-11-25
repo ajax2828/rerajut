@@ -1,17 +1,19 @@
 <?php
 require_once __DIR__ . '/includes/fungsi.php';
 
+pesanan_batalkan_kedaluwarsa($pdo);
+
 $kategoriSlug = isset($_GET['kategori']) ? slug_aman($_GET['kategori']) : '';
-$cari = isset($_GET['q']) ? trim($_GET['q']) : '';
+$cari = isset($_GET['q']) ? trim((string) $_GET['q']) : '';
 $urut = $_GET['urut'] ?? 'terbaru';
 if (!in_array($urut, ['terbaru', 'termurah', 'termahal', 'nama'], true)) {
     $urut = 'terbaru';
 }
-$hal = max(1, (int) ($_GET['hal'] ?? 1));
 $perHal = 12;
-$offset = ($hal - 1) * $perHal;
 $total = produk_hitung($pdo, $kategoriSlug, $cari);
 $totalHal = max(1, (int) ceil($total / $perHal));
+$hal = min($totalHal, max(1, (int) ($_GET['hal'] ?? 1)));
+$offset = ($hal - 1) * $perHal;
 $produkList = produk_all($pdo, $kategoriSlug, $cari, $urut, $perHal, $offset);
 $kategoriList = kategori_all($pdo);
 $kategoriAktif = null;
@@ -21,12 +23,12 @@ foreach ($kategoriList as $k) {
     }
 }
 
-$judul = $kategoriAktif ? 'Produk ' . $kategoriAktif['nama'] . ' Thrift | Rerajut Thrift' : 'Katalog Baju Thrift | Rerajut Thrift';
+$judul = $kategoriAktif ? 'Produk ' . $kategoriAktif['nama'] . ' Thrift | ' . SITE_NAMA : 'Katalog Baju Thrift | ' . SITE_NAMA;
 if ($cari !== '') {
-    $judul = 'Hasil Pencarian ' . $cari . ' | Rerajut Thrift';
+    $judul = 'Hasil Pencarian ' . $cari . ' | ' . SITE_NAMA;
 }
-$deskripsi = 'Lihat koleksi baju thrift pilihan Rerajut Thrift. Stok satuan, kondisi terkurasi, harga mulai Rp 45.000, dan pengiriman ke seluruh Indonesia.';
-$kanonikal = SITE_URL . '/produk.php';
+$deskripsi = 'Lihat koleksi baju thrift pilihan ' . SITE_NAMA . '. Stok satuan, kondisi terkurasi, dan pengiriman ke seluruh Indonesia.';
+$kanonikal = SITE_URL . '/produk.php' . ($kategoriAktif ? '?kategori=' . urlencode($kategoriAktif['slug']) : '');
 $halaman = 'produk';
 require_once __DIR__ . '/includes/header.php';
 ?>

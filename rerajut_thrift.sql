@@ -173,7 +173,7 @@ INSERT INTO `produk` (`id`, `kategori_id`, `nama`, `slug`, `deskripsi`, `harga`,
 (10, 1, 'Sweater Pink Cropped', 'sweater-pink-cropped', 'Sweater rajut pink potongan cropped dengan ujung mengkerut. Warna lembut dan bahan tidak tebal.', 68000, 105000, 'S', 'Sangat Baik', 1, 'produk-10.jpg', 0, '2026-11-19 21:47:41'),
 (11, 4, 'Celana Chino Krem', 'celana-chino-krem', 'Celana chino warna krem dengan potongan lurus. Bahan tebal, jahitan rapi, dan saku berfungsi dengan baik.', 95000, 160000, '30', 'Sangat Baik', 0, 'produk-11.jpg', 1, '2026-11-19 21:47:41'),
 (12, 1, 'Sweater Rajut Manik', 'sweater-rajut-manik', 'Sweater rajut warna krem dengan hiasan manik merah. Detail manik lengkap dan rajutan masih kuat.', 88000, 145000, 'M', 'Sangat Baik', 1, 'produk-12.jpg', 1, '2026-11-19 21:47:41'),
-(13, 6, 'Set Vest dan Kemeja', 'set-vest-dan-kemeja', 'Setelan vest coklat dan kemeja putih dalam satu paket. Bisa dipakai bersama atau dipisah sesuai kebutuhan.', 99000, 170000, 'M', 'Sangat Baik', 0, 'produk-13.jpg', 1, '2026-11-19 21:47:41'),
+(13, 6, 'Set Vest dan Kemeja', 'set-vest-dan-kemeja', 'Setelan vest coklat dan kemeja putih dalam satu paket. Bisa dipakai bersama atau dipisah sesuai kebutuhan.', 99000, 170000, 'M', 'Sangat Baik', 1, 'produk-13.jpg', 1, '2026-11-19 21:47:41'),
 (14, 5, 'Kemeja Stripe Bordir', 'kemeja-stripe-bordir', 'Kemeja stripe biru dengan bordir bunga di bagian depan. Bahan ringan, cocok untuk acara santai maupun kerja.', 79000, 125000, 'L', 'Baik', 1, 'produk-14.jpg', 0, '2026-11-19 21:47:41');
 
 -- --------------------------------------------------------
@@ -220,14 +220,16 @@ ALTER TABLE `langganan`
 --
 ALTER TABLE `pesanan`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `kode` (`kode`);
+  ADD UNIQUE KEY `kode` (`kode`),
+  ADD KEY `idx_pesanan_status_batas` (`status`, `batas_bayar`);
 
 --
 -- Indeks untuk tabel `pesanan_item`
 --
 ALTER TABLE `pesanan_item`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `fk_item_pesanan` (`pesanan_id`);
+  ADD KEY `fk_item_pesanan` (`pesanan_id`),
+  ADD KEY `idx_item_produk` (`produk_id`);
 
 --
 -- Indeks untuk tabel `pesan_kontak`
@@ -241,7 +243,9 @@ ALTER TABLE `pesan_kontak`
 ALTER TABLE `produk`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `slug` (`slug`),
-  ADD KEY `fk_produk_kategori` (`kategori_id`);
+  ADD KEY `fk_produk_kategori` (`kategori_id`),
+  ADD KEY `idx_produk_unggulan_stok` (`unggulan`, `stok`),
+  ADD KEY `idx_produk_stok` (`stok`);
 
 --
 -- Indeks untuk tabel `users`

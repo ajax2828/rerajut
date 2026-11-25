@@ -6,27 +6,32 @@ $galat = [];
 $berhasil = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $limit = rate_limit_cek('kontak', 5, 600);
+    if ($limit['terblokir']) {
+        $galat[] = 'Terlalu banyak pesan dikirim. Silakan coba lagi dalam ' . ceil($limit['sisa_detik'] / 60) . ' menit.';
+    }
     if (!csrf_valid()) {
         $galat[] = 'Sesi tidak valid. Silakan muat ulang halaman.';
     }
     foreach ($data as $kunci => $nilai) {
-        $data[$kunci] = trim($_POST[$kunci] ?? '');
+        $data[$kunci] = trim((string) ($_POST[$kunci] ?? ''));
     }
-    if (mb_strlen($data['nama']) < 3) {
-        $galat[] = 'Nama minimal 3 karakter.';
+    if (mb_strlen($data['nama']) < 3 || mb_strlen($data['nama']) > 120) {
+        $galat[] = 'Nama harus antara 3 sampai 120 karakter.';
     }
-    if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+    if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($data['email']) > 150) {
         $galat[] = 'Alamat email tidak valid.';
     }
-    if ($data['subjek'] === '') {
-        $galat[] = 'Subjek pesan wajib diisi.';
+    if ($data['subjek'] === '' || mb_strlen($data['subjek']) > 150) {
+        $galat[] = 'Subjek pesan wajib diisi (maksimal 150 karakter).';
     }
-    if (mb_strlen($data['pesan']) < 10) {
-        $galat[] = 'Pesan minimal 10 karakter.';
+    if (mb_strlen($data['pesan']) < 10 || mb_strlen($data['pesan']) > 3000) {
+        $galat[] = 'Pesan harus antara 10 sampai 3000 karakter.';
     }
     if (!$galat) {
         $stmt = $pdo->prepare('INSERT INTO pesan_kontak (nama, email, subjek, pesan) VALUES (?, ?, ?, ?)');
         $stmt->execute([$data['nama'], $data['email'], $data['subjek'], $data['pesan']]);
+        rate_limit_catat('kontak', 600);
         $berhasil = true;
         $data = ['nama' => '', 'email' => '', 'subjek' => '', 'pesan' => ''];
     }

@@ -104,6 +104,7 @@
   var wadahPesanan = document.getElementById("daftar-pesanan-saya");
   if (wadahPesanan) {
     var api = wadahPesanan.getAttribute("data-api");
+    var baseUrl = wadahPesanan.getAttribute("data-base") || "";
     var infoMuat = document.getElementById("pesanan-saya-muat");
     var infoKosong = document.getElementById("pesanan-saya-kosong");
     var daftarKode = bacaPesanan();
@@ -160,12 +161,12 @@
 
       var aksi = buatElemen("div", "kartu-pesanan-aksi");
       var lacak = buatElemen("a", "tombol tombol-kecil", "Lacak Pesanan");
-      lacak.href = "lacak.php?kode=" + encodeURIComponent(pesanan.kode);
+      lacak.href = baseUrl + "/lacak.php?kode=" + encodeURIComponent(pesanan.kode);
       aksi.appendChild(lacak);
 
       if (pesanan.bisa_upload) {
         var upload = buatElemen("a", "tombol tombol-kecil tombol-garis", "Upload Bukti");
-        upload.href = "pesanan-sukses.php?kode=" + encodeURIComponent(pesanan.kode) + "#pembayaran";
+        upload.href = baseUrl + "/pesanan-sukses.php?kode=" + encodeURIComponent(pesanan.kode) + "#pembayaran";
         aksi.appendChild(upload);
       }
 

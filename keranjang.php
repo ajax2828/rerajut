@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/includes/fungsi.php';
 
+no_cache_headers();
+pesanan_batalkan_kedaluwarsa($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_valid()) {
         flash_set('gagal', 'Sesi tidak valid. Silakan coba lagi.');
@@ -35,10 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $jumlah = (int) ($_POST['jumlah'] ?? 1);
         if ($stok < 1) {
             keranjang_hapus($id);
+            flash_set('gagal', 'Produk sudah terjual dan dihapus dari keranjang.');
         } else {
             keranjang_set($id, min($stok, max(1, $jumlah)));
+            flash_set('sukses', 'Keranjang diperbarui.');
         }
-        flash_set('sukses', 'Keranjang diperbarui.');
         redirect(BASE_URL . '/keranjang.php');
     }
 
@@ -47,9 +51,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_set('sukses', 'Produk dihapus dari keranjang.');
         redirect(BASE_URL . '/keranjang.php');
     }
+
+    flash_set('gagal', 'Aksi keranjang tidak valid.');
+    redirect(BASE_URL . '/keranjang.php');
 }
 
-$items = keranjang_item($pdo);
+$penyesuaianKeranjang = [];
+$items = keranjang_item($pdo, $penyesuaianKeranjang);
+if ($penyesuaianKeranjang && empty($_SESSION['flash'])) {
+    flash_set('gagal', implode(' ', $penyesuaianKeranjang));
+}
 $subtotal = 0;
 foreach ($items as $item) {
     $subtotal += $item['subtotal'];

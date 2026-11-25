@@ -8,6 +8,25 @@ $og_gambar = $og_gambar ?? SITE_URL . '/images/produk-06.jpg';
 $halaman = $halaman ?? '';
 $robots = $robots ?? 'index, follow';
 $flash = flash_ambil();
+
+$skemaToko = json_encode([
+    '@context' => 'https://schema.org',
+    '@type' => 'OnlineStore',
+    'name' => SITE_NAMA,
+    'url' => SITE_URL,
+    'logo' => SITE_URL . '/assets/img/logo.svg',
+    'description' => SITE_DESKRIPSI,
+    'email' => SITE_EMAIL,
+    'telephone' => SITE_TELEPON,
+    'address' => [
+        '@type' => 'PostalAddress',
+        'streetAddress' => SITE_ALAMAT,
+        'addressCountry' => 'ID',
+    ],
+    'sameAs' => [
+        'https://www.instagram.com/rerajut.thrift',
+    ],
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -34,33 +53,14 @@ $flash = flash_ambil();
 <link rel="icon" href="<?= e(BASE_URL) ?>/assets/img/favicon.svg" type="image/svg+xml">
 <link rel="sitemap" type="application/xml" href="<?= e(SITE_URL) ?>/sitemap.php">
 <link rel="stylesheet" href="<?= e(BASE_URL) ?>/assets/css/style.css">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "OnlineStore",
-  "name": "<?= e(SITE_NAMA) ?>",
-  "url": "<?= e(SITE_URL) ?>",
-  "logo": "<?= e(SITE_URL) ?>/assets/img/logo.svg",
-  "description": "<?= e(SITE_DESKRIPSI) ?>",
-  "email": "<?= e(SITE_EMAIL) ?>",
-  "telephone": "<?= e(SITE_TELEPON) ?>",
-  "address": {
-    "@type": "PostalAddress",
-    "streetAddress": "<?= e(SITE_ALAMAT) ?>",
-    "addressCountry": "ID"
-  },
-  "sameAs": [
-    "https://www.instagram.com/rerajut.thrift"
-  ]
-}
-</script>
+<script type="application/ld+json"><?= $skemaToko ?></script>
 </head>
 <body>
 <a class="lewati" href="#konten">Lewati ke konten</a>
 <header class="situs-header">
   <div class="wadah header-dalam">
     <a class="logo" href="<?= e(BASE_URL) ?>/index.php">
-      <img src="<?= e(BASE_URL) ?>/assets/img/logo.svg" alt="Logo Rerajut Thrift" width="170" height="48">
+      <img src="<?= e(BASE_URL) ?>/assets/img/logo.svg" alt="Logo <?= e(SITE_NAMA) ?>" width="170" height="48">
     </a>
     <button class="tombol-menu" type="button" aria-label="Buka menu" aria-expanded="false" data-menu>
       <span></span><span></span><span></span>
@@ -70,9 +70,14 @@ $flash = flash_ambil();
       <span class="admin-pengguna">Halo, <?= e($_SESSION['admin_username'] ?? 'admin') ?></span>
       <a href="<?= e(BASE_URL) ?>/admin/index.php" class="<?= $halaman === 'admin-pesanan' ? 'aktif' : '' ?>">Pesanan</a>
       <a href="<?= e(BASE_URL) ?>/admin/produk.php" class="<?= $halaman === 'admin-produk' ? 'aktif' : '' ?>">Produk</a>
-      <a href="<?= e(BASE_URL) ?>/admin/pesan.php" class="<?= $halaman === 'admin-pesan' ? 'aktif' : '' ?>">Pesan Pelanggan</a>
+      <a href="<?= e(BASE_URL) ?>/admin/kategori.php" class="<?= $halaman === 'admin-kategori' ? 'aktif' : '' ?>">Kategori</a>
+      <a href="<?= e(BASE_URL) ?>/admin/pesan.php" class="<?= $halaman === 'admin-pesan' ? 'aktif' : '' ?>">Pesan</a>
+      <a href="<?= e(BASE_URL) ?>/admin/akun.php" class="<?= $halaman === 'admin-akun' ? 'aktif' : '' ?>">Akun</a>
       <a href="<?= e(BASE_URL) ?>/index.php">Lihat Toko</a>
-      <a class="tautan-keluar-admin" href="<?= e(BASE_URL) ?>/admin/logout.php">Keluar</a>
+      <form action="<?= e(BASE_URL) ?>/admin/logout.php" method="post" class="form-keluar-admin">
+        <?= csrf_field() ?>
+        <button type="submit" class="tautan-keluar-admin">Keluar</button>
+      </form>
       <?php else: ?>
       <a href="<?= e(BASE_URL) ?>/index.php" class="<?= $halaman === 'beranda' ? 'aktif' : '' ?>">Beranda</a>
       <a href="<?= e(BASE_URL) ?>/produk.php" class="<?= $halaman === 'produk' ? 'aktif' : '' ?>">Produk</a>

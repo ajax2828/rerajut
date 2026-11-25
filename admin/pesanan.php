@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/auth.php';
 
-$kode = trim($_GET['kode'] ?? '');
+pesanan_batalkan_kedaluwarsa($pdo);
+
+$kode = trim((string) ($_GET['kode'] ?? ''));
 $statusList = admin_status_pesanan();
 $stmt = $pdo->prepare('SELECT * FROM pesanan WHERE kode = ? LIMIT 1');
 $stmt->execute([$kode]);
@@ -16,13 +18,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_valid()) {
         flash_set('gagal', 'Sesi tidak valid.');
     } else {
-        $status = $_POST['status'] ?? '';
-        if (in_array($status, $statusList, true)) {
-            $stmt = $pdo->prepare('UPDATE pesanan SET status = ? WHERE id = ?');
-            $stmt->execute([$status, $pesanan['id']]);
-            flash_set('sukses', 'Status pesanan diperbarui menjadi ' . $status . '.');
+        $aksi = (string) ($_POST['aksi'] ?? 'status');
+        if ($aksi === 'tolak_bukti') {
+            if ($pesanan['metode_bayar'] === 'COD' || empty($pesanan['bukti_bayar'])) {
+                flash_set('gagal', 'Pesanan ini tidak memiliki bukti pembayaran untuk ditolak.');
+            } else {
+                try {
+                    $pdo->beginTransaction();
+                    $stmtLock = $pdo->prepare('SELECT id, status, bukti_bayar, batas_bayar FROM pesanan WHERE id = ? FOR UPDATE');
+                    $stmtLock->execute([$pesanan['id']]);
+                    $terkunci = $stmtLock->fetch();
+                    if (!$terkunci || empty($terkunci['bukti_bayar'])) {
+                        $pdo->rollBack();
+                        flash_set('gagal', 'Bukti pembayaran tidak ditemukan.');
+                    } elseif ($terkunci['status'] === 'Dibatalkan' || $terkunci['status'] === 'Selesai') {
+                        $pdo->rollBack();
+                        flash_set('gagal', 'Bukti tidak dapat ditolak pada status ' . $terkunci['status'] . '.');
+                    } else {
+                        $batasBaru = (!empty($terkunci['batas_bayar']) && strtotime($terkunci['batas_bayar']) > time())
+                            ? $terkunci['batas_bayar']
+                            : date('Y-m-d H:i:s', time() + 86400);
+                        $stmtUpd = $pdo->prepare("UPDATE pesanan SET bukti_bayar = NULL, dibayar_pada = NULL, status = 'Menunggu Pembayaran', batas_bayar = ? WHERE id = ?");
+                        $stmtUpd->execute([$batasBaru, $pesanan['id']]);
+                        $pdo->commit();
+
+                        $berkasBukti = __DIR__ . '/../uploads/bukti/' . basename($terkunci['bukti_bayar']);
+                        if (is_file($berkasBukti)) {
+                            @unlink($berkasBukti);
+                        }
+                        flash_set('sukses', 'Bukti pembayaran ditolak dan dihapus. Pembeli dapat mengunggah bukti baru hingga ' . tanggal_wib($batasBaru) . '.');
+                    }
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    error_log('[Rerajut Tolak Bukti Error] ' . $e->getMessage());
+                    flash_set('gagal', 'Gagal menolak bukti pembayaran.');
+                }
+            }
         } else {
-            flash_set('gagal', 'Status tidak valid.');
+            $status = (string) ($_POST['status'] ?? '');
+            $hasil = pesanan_ubah_status($pdo, $pesanan['id'], $status);
+            flash_set($hasil['ok'] ? 'sukses' : 'gagal', $hasil['pesan']);
         }
     }
     redirect(BASE_URL . '/admin/pesanan.php?kode=' . urlencode($pesanan['kode']));
@@ -32,8 +69,8 @@ $stmt = $pdo->prepare('SELECT * FROM pesanan_item WHERE pesanan_id = ? ORDER BY 
 $stmt->execute([$pesanan['id']]);
 $itemPesanan = $stmt->fetchAll();
 
-$judul = 'Detail Pesanan ' . $pesanan['kode'] . ' | Admin Rerajut Thrift';
-$deskripsi = 'Detail pesanan pelanggan Rerajut Thrift.';
+$judul = 'Detail Pesanan ' . $pesanan['kode'] . ' | Admin ' . SITE_NAMA;
+$deskripsi = 'Detail pesanan pelanggan ' . SITE_NAMA . '.';
 $kanonikal = SITE_URL . '/admin/pesanan.php';
 $robots = 'noindex, nofollow';
 $halaman = 'admin-pesanan';
@@ -96,8 +133,8 @@ require_once __DIR__ . '/../includes/header.php';
             <div><dt>Provinsi</dt><dd><?= e($pesanan['provinsi']) ?></dd></div>
             <div><dt>Kode pos</dt><dd><?= e($pesanan['kode_pos']) ?></dd></div>
             <div><dt>Metode bayar</dt><dd><?= e($pesanan['metode_bayar']) ?></dd></div>
-            <div><dt>Catatan</dt><dd><?= $pesanan['catatan'] !== '' ? nl2br(e($pesanan['catatan'])) : 'Tidak ada catatan' ?></dd></div>
-            <div><dt>Tanggal</dt><dd><?= date('d-m-Y H:i', strtotime($pesanan['dibuat_pada'])) ?> WIB</dd></div>
+            <div><dt>Catatan</dt><dd><?= trim((string) ($pesanan['catatan'] ?? '')) !== '' ? nl2br(e($pesanan['catatan'])) : 'Tidak ada catatan' ?></dd></div>
+            <div><dt>Tanggal</dt><dd><?= e(tanggal_wib($pesanan['dibuat_pada'])) ?></dd></div>
           </dl>
         </div>
 
@@ -106,19 +143,26 @@ require_once __DIR__ . '/../includes/header.php';
           <dl class="admin-dl">
             <div><dt>Metode</dt><dd><?= e($pesanan['metode_bayar']) ?></dd></div>
             <div><dt>Status</dt><dd><?= e($pesanan['status']) ?></dd></div>
-            <?php if ($pesanan['batas_bayar']): ?>
-            <div><dt>Batas bayar</dt><dd><?= date('d-m-Y H:i', strtotime($pesanan['batas_bayar'])) ?> WIB</dd></div>
+            <?php if (!empty($pesanan['batas_bayar'])): ?>
+            <div><dt>Batas bayar</dt><dd><?= e(tanggal_wib($pesanan['batas_bayar'])) ?></dd></div>
             <?php endif; ?>
-            <?php if ($pesanan['dibayar_pada']): ?>
-            <div><dt>Diunggah pada</dt><dd><?= date('d-m-Y H:i', strtotime($pesanan['dibayar_pada'])) ?> WIB</dd></div>
+            <?php if (!empty($pesanan['dibayar_pada'])): ?>
+            <div><dt>Diunggah pada</dt><dd><?= e(tanggal_wib($pesanan['dibayar_pada'])) ?></dd></div>
             <?php endif; ?>
             <div>
               <dt>Bukti bayar</dt>
               <dd>
-                <?php if ($pesanan['bukti_bayar']): ?>
+                <?php if (!empty($pesanan['bukti_bayar'])): ?>
                 <a class="tautan-bukti" href="<?= e(BASE_URL) ?>/uploads/bukti/<?= e($pesanan['bukti_bayar']) ?>" target="_blank" rel="noopener">
                   <img src="<?= e(BASE_URL) ?>/uploads/bukti/<?= e($pesanan['bukti_bayar']) ?>" alt="Bukti pembayaran <?= e($pesanan['kode']) ?>" width="180" height="240">
                 </a>
+                <?php if ($pesanan['status'] !== 'Selesai' && $pesanan['status'] !== 'Dibatalkan'): ?>
+                <form action="<?= e(BASE_URL) ?>/admin/pesanan.php?kode=<?= e(urlencode($pesanan['kode'])) ?>" method="post" class="tombol-jarak" data-konfirmasi="Tolak dan hapus bukti pembayaran ini agar pembeli bisa mengunggah ulang?">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="aksi" value="tolak_bukti">
+                  <button type="submit" class="tombol tombol-kecil tombol-hapus">Tolak Bukti Pembayaran</button>
+                </form>
+                <?php endif; ?>
                 <?php else: ?>
                 Belum ada bukti pembayaran
                 <?php endif; ?>
@@ -131,8 +175,9 @@ require_once __DIR__ . '/../includes/header.php';
       <aside class="ringkasan">
         <h2>Ubah Status</h2>
         <p>Status saat ini: <strong><?= e($pesanan['status']) ?></strong></p>
-        <form action="<?= e(BASE_URL) ?>/admin/pesanan.php?kode=<?= e($pesanan['kode']) ?>" method="post">
+        <form action="<?= e(BASE_URL) ?>/admin/pesanan.php?kode=<?= e(urlencode($pesanan['kode'])) ?>" method="post">
           <?= csrf_field() ?>
+          <input type="hidden" name="aksi" value="status">
           <div class="kolom-form">
             <label for="status">Status pesanan</label>
             <select id="status" name="status">
@@ -143,7 +188,7 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
           <button type="submit" class="tombol tombol-lebar">Perbarui Status</button>
         </form>
-        <p class="ringkasan-catatan">Status akan langsung terlihat oleh pembeli pada halaman lacak pesanan.</p>
+        <p class="ringkasan-catatan">Membatalkan pesanan akan mengembalikan stok produk secara otomatis.</p>
       </aside>
     </div>
   </div>

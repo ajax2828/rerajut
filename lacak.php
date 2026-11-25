@@ -1,7 +1,10 @@
 <?php
 require_once __DIR__ . '/includes/fungsi.php';
 
-$kode = trim($_GET['kode'] ?? '');
+no_cache_headers();
+pesanan_batalkan_kedaluwarsa($pdo);
+
+$kode = trim((string) ($_GET['kode'] ?? ''));
 $pesanan = null;
 $itemPesanan = [];
 $sudahCari = $kode !== '';
@@ -25,9 +28,12 @@ $indeksStatus = $pesanan ? array_search($pesanan['status'], $urutanStatus, true)
 if ($indeksStatus === false) {
     $indeksStatus = $pesanan && $pesanan['status'] === 'Dibatalkan' ? -1 : 0;
 }
+$metodeNonCod = $pesanan && in_array($pesanan['metode_bayar'], ['Transfer Bank', 'E-Wallet'], true);
+$lewatBatas = $pesanan && !empty($pesanan['batas_bayar']) && time() > strtotime($pesanan['batas_bayar']);
+$bisaUpload = $metodeNonCod && $pesanan['status'] === 'Menunggu Pembayaran' && empty($pesanan['bukti_bayar']) && !$lewatBatas;
 
-$judul = 'Lacak Pesanan | Rerajut Thrift';
-$deskripsi = 'Cek status pesanan baju thrift kamu di Rerajut Thrift dengan memasukkan kode pesanan.';
+$judul = 'Lacak Pesanan | ' . SITE_NAMA;
+$deskripsi = 'Cek status pesanan baju thrift kamu di ' . SITE_NAMA . ' dengan memasukkan kode pesanan.';
 $kanonikal = SITE_URL . '/lacak.php';
 $halaman = 'lacak';
 $robots = 'noindex, follow';
@@ -71,19 +77,25 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <span class="status-lencana"><?= e($pesanan['status']) ?></span>
       </div>
+      <?php if ($pesanan['status'] === 'Dibatalkan'): ?>
+      <div class="kotak-galat">
+        <p>Pesanan ini telah dibatalkan. Jika ada pertanyaan, hubungi kami melalui halaman kontak dengan menyertakan kode pesanan.</p>
+      </div>
+      <?php else: ?>
       <ol class="linimasa">
         <?php foreach ($urutanStatus as $i => $status): ?>
         <li class="<?= $i <= $indeksStatus ? 'selesai' : '' ?>">
           <span class="titik"></span>
           <div>
             <strong><?= e($status) ?></strong>
-            <?php if ($i === 0 && $pesanan['metode_bayar'] !== 'COD'): ?>
-            <small>Pesanan dibuat pada <?= date('d-m-Y H:i', strtotime($pesanan['dibuat_pada'])) ?> WIB</small>
+            <?php if ($i === 0): ?>
+            <small>Pesanan dibuat pada <?= e(tanggal_wib($pesanan['dibuat_pada'])) ?></small>
             <?php endif; ?>
           </div>
         </li>
         <?php endforeach; ?>
       </ol>
+      <?php endif; ?>
       <?php if ($pesanan['metode_bayar'] === 'COD'): ?>
       <p class="checkout-catatan">Pembayaran dilakukan secara tunai saat pesanan diterima.</p>
       <?php endif; ?>
@@ -113,12 +125,15 @@ require_once __DIR__ . '/includes/header.php';
           <p><strong><?= e($pesanan['nama']) ?></strong><br><?= e($pesanan['telepon']) ?></p>
           <p><?= nl2br(e($pesanan['alamat'])) ?><br><?= e($pesanan['kota']) ?>, <?= e($pesanan['provinsi']) ?> <?= e($pesanan['kode_pos']) ?></p>
           <p>Metode bayar: <strong><?= e($pesanan['metode_bayar']) ?></strong></p>
-          <?php if ($pesanan['batas_bayar']): ?>
-          <p>Batas upload bukti: <strong><?= date('d-m-Y H:i', strtotime($pesanan['batas_bayar'])) ?> WIB</strong></p>
+          <?php if (!empty($pesanan['batas_bayar']) && $pesanan['status'] === 'Menunggu Pembayaran'): ?>
+          <p>Batas upload bukti: <strong><?= e(tanggal_wib($pesanan['batas_bayar'])) ?></strong></p>
           <?php endif; ?>
-          <?php if ($pesanan['bukti_bayar']): ?>
+          <?php if (!empty($pesanan['bukti_bayar'])): ?>
           <p>Bukti pembayaran: <a class="tautan-lain" href="<?= e(BASE_URL) ?>/uploads/bukti/<?= e($pesanan['bukti_bayar']) ?>" target="_blank" rel="noopener">Lihat bukti</a></p>
-          <?php elseif (in_array($pesanan['metode_bayar'], ['Transfer Bank', 'E-Wallet'], true)): ?>
+          <?php elseif ($bisaUpload): ?>
+          <p>Bukti pembayaran belum diunggah.</p>
+          <a class="tombol tombol-kecil" href="<?= e(BASE_URL) ?>/pesanan-sukses.php?kode=<?= e(urlencode($pesanan['kode'])) ?>#pembayaran">Upload Bukti Pembayaran</a>
+          <?php elseif ($metodeNonCod): ?>
           <p>Bukti pembayaran belum diunggah.</p>
           <?php endif; ?>
         </div>

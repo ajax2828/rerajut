@@ -2369,3 +2369,64 @@ input[type="file"] {
     width: 100%;
   }
 }
+
+.form-keluar-admin {
+  display: inline-flex;
+  margin: 0;
+}
+
+button.tautan-keluar-admin {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 6px 0;
+  font-size: 0.93rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.tautan-keluar-admin:hover {
+  border-bottom-color: var(--merah);
+}
+
+.admin-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.admin-filter input[type="search"],
+.admin-filter input[type="text"],
+.admin-filter select {
+  width: auto;
+  min-width: 180px;
+  flex: 1 1 180px;
+  padding: 9px 12px;
+  font-size: 0.88rem;
+}
+
+.bukti-lencana {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #e4ebd9;
+  color: var(--hijau-tua);
+}
+
+@media (max-width: 900px) {
+  .form-keluar-admin {
+    width: 100%;
+  }
+
+  button.tautan-keluar-admin {
+    width: 100%;
+    text-align: left;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--garis);
+  }
+}

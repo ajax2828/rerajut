@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/fungsi.php';
 
+pesanan_batalkan_kedaluwarsa($pdo);
+
 $slug = isset($_GET['slug']) ? slug_aman($_GET['slug']) : '';
 $produk = $slug !== '' ? produk_by_slug($pdo, $slug) : null;
 if (!$produk) {
@@ -17,7 +19,9 @@ if (!$produk) {
 
 $terkait = produk_terkait($pdo, $produk['kategori_id'], $produk['id']);
 $habis = (int) $produk['stok'] < 1;
-$diskon = $produk['harga_asli'] > $produk['harga'] ? (int) round(100 - ($produk['harga'] / $produk['harga_asli'] * 100)) : 0;
+$diskon = ((int) $produk['harga_asli'] > 0 && (int) $produk['harga_asli'] > (int) $produk['harga'])
+    ? (int) round(100 - ($produk['harga'] / $produk['harga_asli'] * 100))
+    : 0;
 $gambarUrl = SITE_URL . '/images/' . $produk['gambar'];
 
 $judul = $produk['nama'] . ' Ukuran ' . $produk['ukuran'] . ' | Rerajut Thrift';

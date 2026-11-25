@@ -14,6 +14,7 @@ if ($id > 0) {
 }
 
 $kategoriList = kategori_all($pdo);
+$kondisiOpsi = ['Sangat Baik', 'Baik', 'Cukup'];
 $galat = [];
 $data = [
     'nama' => $produk['nama'] ?? '',
@@ -29,123 +30,135 @@ $data = [
 $gambarLama = $produk['gambar'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!csrf_valid()) {
-        $galat[] = 'Sesi tidak valid. Silakan coba lagi.';
-    }
-    $data['nama'] = trim($_POST['nama'] ?? '');
-    $data['kategori_id'] = (int) ($_POST['kategori_id'] ?? 0);
-    $data['deskripsi'] = trim($_POST['deskripsi'] ?? '');
-    $data['harga'] = (int) preg_replace('/[^0-9]/', '', $_POST['harga'] ?? '');
-    $data['harga_asli'] = (int) preg_replace('/[^0-9]/', '', $_POST['harga_asli'] ?? '');
-    $data['ukuran'] = trim($_POST['ukuran'] ?? '');
-    $data['kondisi'] = trim($_POST['kondisi'] ?? '');
-    $data['stok'] = (int) ($_POST['stok'] ?? 0);
-    $data['unggulan'] = isset($_POST['unggulan']) ? 1 : 0;
-
-    if (mb_strlen($data['nama']) < 3) {
-        $galat[] = 'Nama produk minimal 3 karakter.';
-    }
-    $stmt = $pdo->prepare('SELECT id FROM kategori WHERE id = ? LIMIT 1');
-    $stmt->execute([$data['kategori_id']]);
-    if (!$stmt->fetch()) {
-        $galat[] = 'Kategori produk wajib dipilih.';
-    }
-    if (mb_strlen($data['deskripsi']) < 10) {
-        $galat[] = 'Deskripsi produk minimal 10 karakter.';
-    }
-    if ($data['harga'] < 1) {
-        $galat[] = 'Harga produk wajib diisi.';
-    }
-    if ($data['harga_asli'] < $data['harga']) {
-        $galat[] = 'Harga asli tidak boleh lebih rendah dari harga jual.';
-    }
-    if ($data['ukuran'] === '') {
-        $galat[] = 'Ukuran produk wajib diisi.';
-    }
-    if ($data['kondisi'] === '') {
-        $galat[] = 'Kondisi produk wajib dipilih.';
-    }
-    if ($data['stok'] < 0) {
-        $galat[] = 'Stok tidak boleh negatif.';
-    }
-
-    $gambarBaru = null;
-    if (!empty($_FILES['gambar']['name'])) {
-        $file = $_FILES['gambar'];
-        if ($file['error'] !== UPLOAD_ERR_OK) {
-            $galat[] = 'File gambar gagal diunggah.';
-        } elseif ($file['size'] > 2 * 1024 * 1024) {
-            $galat[] = 'Ukuran gambar maksimal 2 MB.';
-        } else {
-            $izin = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
-            $finfo = new finfo(FILEINFO_MIME_TYPE);
-            $mime = $finfo->file($file['tmp_name']);
-            if (!isset($izin[$mime])) {
-                $galat[] = 'Format gambar harus JPG, PNG, atau WEBP.';
-            } else {
-                $gambarBaru = 'produk-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $izin[$mime];
-                if (!move_uploaded_file($file['tmp_name'], __DIR__ . '/../images/' . $gambarBaru)) {
-                    $galat[] = 'Gambar gagal disimpan.';
-                    $gambarBaru = null;
-                }
-            }
+    if (post_terlalu_besar()) {
+        $galat[] = 'Ukuran data atau gambar terlalu besar. Maksimal 2 MB.';
+    } else {
+        if (!csrf_valid()) {
+            $galat[] = 'Sesi tidak valid. Silakan coba lagi.';
         }
-    }
-    if (!$produk && !$gambarBaru) {
-        $galat[] = 'Gambar produk wajib diunggah.';
-    }
+        $data['nama'] = trim((string) ($_POST['nama'] ?? ''));
+        $data['kategori_id'] = (int) ($_POST['kategori_id'] ?? 0);
+        $data['deskripsi'] = trim((string) ($_POST['deskripsi'] ?? ''));
+        $data['harga'] = (int) preg_replace('/[^0-9]/', '', (string) ($_POST['harga'] ?? ''));
+        $data['harga_asli'] = (int) preg_replace('/[^0-9]/', '', (string) ($_POST['harga_asli'] ?? ''));
+        $data['ukuran'] = trim((string) ($_POST['ukuran'] ?? ''));
+        $data['kondisi'] = trim((string) ($_POST['kondisi'] ?? ''));
+        $data['stok'] = (int) ($_POST['stok'] ?? 0);
+        $data['unggulan'] = isset($_POST['unggulan']) ? 1 : 0;
 
-    if ($galat && $gambarBaru) {
-        $berkasBaru = __DIR__ . '/../images/' . $gambarBaru;
-        if (is_file($berkasBaru)) {
-            unlink($berkasBaru);
+        if (mb_strlen($data['nama']) < 3 || mb_strlen($data['nama']) > 150) {
+            $galat[] = 'Nama produk harus antara 3 sampai 150 karakter.';
         }
+        $stmt = $pdo->prepare('SELECT id FROM kategori WHERE id = ? LIMIT 1');
+        $stmt->execute([$data['kategori_id']]);
+        if (!$stmt->fetch()) {
+            $galat[] = 'Kategori produk wajib dipilih.';
+        }
+        if (mb_strlen($data['deskripsi']) < 10 || mb_strlen($data['deskripsi']) > 5000) {
+            $galat[] = 'Deskripsi produk harus antara 10 sampai 5000 karakter.';
+        }
+        if ($data['harga'] < 1) {
+            $galat[] = 'Harga produk wajib diisi.';
+        }
+        if ($data['harga_asli'] < $data['harga']) {
+            $galat[] = 'Harga asli tidak boleh lebih rendah dari harga jual.';
+        }
+        if ($data['ukuran'] === '' || mb_strlen($data['ukuran']) > 20) {
+            $galat[] = 'Ukuran produk wajib diisi (maksimal 20 karakter).';
+        }
+        if (!in_array($data['kondisi'], $kondisiOpsi, true)) {
+            $galat[] = 'Kondisi produk tidak valid.';
+        }
+        if ($data['stok'] < 0) {
+            $galat[] = 'Stok tidak boleh negatif.';
+        }
+
         $gambarBaru = null;
-    }
-
-    if (!$galat) {
-        $dasar = slug_aman($data['nama']);
-        if ($dasar === '') {
-            $dasar = 'produk';
-        }
-        $slug = $dasar;
-        $nomor = 2;
-        while (true) {
-            $stmt = $pdo->prepare('SELECT id FROM produk WHERE slug = ? AND id <> ? LIMIT 1');
-            $stmt->execute([$slug, $id]);
-            if (!$stmt->fetch()) {
-                break;
-            }
-            $slug = $dasar . '-' . $nomor;
-            $nomor++;
-        }
-
-        if ($produk) {
-            $gambarFinal = $gambarBaru ?: $gambarLama;
-            $stmt = $pdo->prepare('UPDATE produk SET kategori_id = ?, nama = ?, slug = ?, deskripsi = ?, harga = ?, harga_asli = ?, ukuran = ?, kondisi = ?, stok = ?, gambar = ?, unggulan = ? WHERE id = ?');
-            $stmt->execute([$data['kategori_id'], $data['nama'], $slug, $data['deskripsi'], $data['harga'], $data['harga_asli'], $data['ukuran'], $data['kondisi'], $data['stok'], $gambarFinal, $data['unggulan'], $id]);
-            if ($gambarBaru && $gambarLama !== '' && $gambarLama !== $gambarBaru) {
-                $stmt = $pdo->prepare('SELECT COUNT(*) FROM produk WHERE gambar = ?');
-                $stmt->execute([$gambarLama]);
-                if ((int) $stmt->fetchColumn() === 0) {
-                    $berkas = __DIR__ . '/../images/' . basename($gambarLama);
-                    if (is_file($berkas)) {
-                        unlink($berkas);
+        if (!empty($_FILES['gambar']['name']) || (isset($_FILES['gambar']['error']) && (int) $_FILES['gambar']['error'] !== UPLOAD_ERR_NO_FILE)) {
+            $hasilGambar = validasi_gambar_upload($_FILES['gambar'], 2 * 1024 * 1024);
+            if (!$hasilGambar['ok']) {
+                $galat[] = $hasilGambar['pesan'];
+            } else {
+                $folderGambar = __DIR__ . '/../images';
+                if (!pastikan_folder($folderGambar)) {
+                    error_log('[Rerajut Produk Upload Error] Folder tidak dapat ditulis: ' . $folderGambar);
+                    $galat[] = 'Folder penyimpanan gambar tidak dapat ditulis. Periksa izin folder images/.';
+                } else {
+                    $gambarBaru = 'produk-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $hasilGambar['ext'];
+                    if (!move_uploaded_file($_FILES['gambar']['tmp_name'], $folderGambar . '/' . $gambarBaru)) {
+                        $galat[] = 'Gambar gagal disimpan.';
+                        $gambarBaru = null;
                     }
                 }
             }
-            flash_set('sukses', 'Produk berhasil diperbarui.');
-        } else {
-            $stmt = $pdo->prepare('INSERT INTO produk (kategori_id, nama, slug, deskripsi, harga, harga_asli, ukuran, kondisi, stok, gambar, unggulan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$data['kategori_id'], $data['nama'], $slug, $data['deskripsi'], $data['harga'], $data['harga_asli'], $data['ukuran'], $data['kondisi'], $data['stok'], $gambarBaru, $data['unggulan']]);
-            flash_set('sukses', 'Produk baru berhasil ditambahkan.');
         }
-        redirect(BASE_URL . '/admin/produk.php');
+        if (!$produk && !$gambarBaru) {
+            $galat[] = 'Gambar produk wajib diunggah.';
+        }
+
+        if ($galat && $gambarBaru) {
+            $berkasBaru = __DIR__ . '/../images/' . $gambarBaru;
+            if (is_file($berkasBaru)) {
+                @unlink($berkasBaru);
+            }
+            $gambarBaru = null;
+        }
+
+        if (!$galat) {
+            $dasar = slug_aman($data['nama'], 155);
+            if ($dasar === '') {
+                $dasar = 'produk';
+            }
+            $slug = $dasar;
+            $nomor = 2;
+            while (true) {
+                $stmt = $pdo->prepare('SELECT id FROM produk WHERE slug = ? AND id <> ? LIMIT 1');
+                $stmt->execute([$slug, $id]);
+                if (!$stmt->fetch()) {
+                    break;
+                }
+                $slug = $dasar . '-' . $nomor;
+                $nomor++;
+            }
+
+            try {
+                if ($produk) {
+                    $gambarFinal = $gambarBaru ?: $gambarLama;
+                    $stmt = $pdo->prepare('UPDATE produk SET kategori_id = ?, nama = ?, slug = ?, deskripsi = ?, harga = ?, harga_asli = ?, ukuran = ?, kondisi = ?, stok = ?, gambar = ?, unggulan = ? WHERE id = ?');
+                    $stmt->execute([$data['kategori_id'], $data['nama'], $slug, $data['deskripsi'], $data['harga'], $data['harga_asli'], $data['ukuran'], $data['kondisi'], $data['stok'], $gambarFinal, $data['unggulan'], $id]);
+                    if ($gambarBaru && $gambarLama !== '' && $gambarLama !== $gambarBaru) {
+                        $stmt = $pdo->prepare('SELECT COUNT(*) FROM produk WHERE gambar = ?');
+                        $stmt->execute([$gambarLama]);
+                        if ((int) $stmt->fetchColumn() === 0) {
+                            $berkas = __DIR__ . '/../images/' . basename($gambarLama);
+                            if (is_file($berkas)) {
+                                @unlink($berkas);
+                            }
+                        }
+                    }
+                    flash_set('sukses', 'Produk berhasil diperbarui.');
+                } else {
+                    $stmt = $pdo->prepare('INSERT INTO produk (kategori_id, nama, slug, deskripsi, harga, harga_asli, ukuran, kondisi, stok, gambar, unggulan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    $stmt->execute([$data['kategori_id'], $data['nama'], $slug, $data['deskripsi'], $data['harga'], $data['harga_asli'], $data['ukuran'], $data['kondisi'], $data['stok'], $gambarBaru, $data['unggulan']]);
+                    flash_set('sukses', 'Produk baru berhasil ditambahkan.');
+                }
+                redirect(BASE_URL . '/admin/produk.php');
+            } catch (Throwable $e) {
+                if ($gambarBaru) {
+                    $berkasBaru = __DIR__ . '/../images/' . $gambarBaru;
+                    if (is_file($berkasBaru)) {
+                        @unlink($berkasBaru);
+                    }
+                }
+                error_log('[Rerajut Produk Save Error] ' . $e->getMessage());
+                $galat[] = 'Gagal menyimpan data produk. Silakan coba lagi.';
+            }
+        }
     }
 }
 
-$judul = ($produk ? 'Ubah Produk' : 'Tambah Produk') . ' | Admin Rerajut Thrift';
-$deskripsi = 'Form pengelolaan produk Rerajut Thrift.';
+$judul = ($produk ? 'Ubah Produk' : 'Tambah Produk') . ' | Admin ' . SITE_NAMA;
+$deskripsi = 'Form pengelolaan produk ' . SITE_NAMA . '.';
 $kanonikal = SITE_URL . '/admin/produk-form.php';
 $robots = 'noindex, nofollow';
 $halaman = 'admin-produk';
@@ -178,7 +191,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="baris-form">
           <div class="kolom-form">
             <label for="nama">Nama produk</label>
-            <input type="text" id="nama" name="nama" value="<?= e($data['nama']) ?>" required>
+            <input type="text" id="nama" name="nama" value="<?= e($data['nama']) ?>" maxlength="150" required>
           </div>
           <div class="kolom-form">
             <label for="kategori_id">Kategori</label>
@@ -213,12 +226,12 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="baris-form">
           <div class="kolom-form">
             <label for="ukuran">Ukuran</label>
-            <input type="text" id="ukuran" name="ukuran" value="<?= e($data['ukuran']) ?>" placeholder="Contoh: M atau All Size" required>
+            <input type="text" id="ukuran" name="ukuran" value="<?= e($data['ukuran']) ?>" maxlength="20" placeholder="Contoh: M atau All Size" required>
           </div>
           <div class="kolom-form">
             <label for="kondisi">Kondisi</label>
             <select id="kondisi" name="kondisi" required>
-              <?php foreach (['Sangat Baik', 'Baik', 'Cukup'] as $kondisi): ?>
+              <?php foreach ($kondisiOpsi as $kondisi): ?>
               <option value="<?= e($kondisi) ?>" <?= $data['kondisi'] === $kondisi ? 'selected' : '' ?>><?= e($kondisi) ?></option>
               <?php endforeach; ?>
             </select>

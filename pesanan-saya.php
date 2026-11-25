@@ -28,7 +28,7 @@ require_once __DIR__ . '/includes/header.php';
       <p>Pesanan yang kamu buat akan muncul di halaman ini secara otomatis.</p>
       <a class="tombol" href="<?= e(BASE_URL) ?>/produk.php">Mulai Belanja</a>
     </div>
-    <div id="daftar-pesanan-saya" class="daftar-pesanan-saya" data-api="<?= e(BASE_URL) ?>/api-pesanan.php"></div>
+    <div id="daftar-pesanan-saya" class="daftar-pesanan-saya" data-api="<?= e(BASE_URL) ?>/api-pesanan.php" data-base="<?= e(BASE_URL) ?>"></div>
     <p class="catatan-perangkat">Daftar ini tersimpan di browser perangkat yang kamu pakai. Jika memakai perangkat lain, gunakan kode pesanan pada halaman lacak pesanan.</p>
   </div>
 </section>

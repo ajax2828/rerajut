@@ -2,9 +2,10 @@
 require_once __DIR__ . '/auth.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $kembali = url_kembali_aman($_SERVER['HTTP_REFERER'] ?? '', BASE_URL . '/admin/produk.php');
     if (!csrf_valid()) {
         flash_set('gagal', 'Sesi tidak valid.');
-        redirect(BASE_URL . '/admin/produk.php');
+        redirect($kembali);
     }
     if (($_POST['aksi'] ?? '') === 'hapus') {
         $id = (int) ($_POST['id'] ?? 0);
@@ -13,28 +14,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $produk = $stmt->fetch();
         if (!$produk) {
             flash_set('gagal', 'Produk tidak ditemukan.');
-            redirect(BASE_URL . '/admin/produk.php');
+            redirect($kembali);
         }
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM produk WHERE gambar = ? AND id <> ?');
         $stmt->execute([$produk['gambar'], $id]);
         $dipakai = (int) $stmt->fetchColumn();
         $stmt = $pdo->prepare('DELETE FROM produk WHERE id = ?');
         $stmt->execute([$id]);
-        if ($dipakai === 0) {
+        if ($dipakai === 0 && !empty($produk['gambar'])) {
             $berkas = __DIR__ . '/../images/' . basename($produk['gambar']);
             if (is_file($berkas)) {
-                unlink($berkas);
+                @unlink($berkas);
             }
         }
         flash_set('sukses', 'Produk ' . $produk['nama'] . ' berhasil dihapus.');
-        redirect(BASE_URL . '/admin/produk.php');
+        redirect($kembali);
     }
 }
 
-$produkList = $pdo->query('SELECT p.*, k.nama AS kategori FROM produk p JOIN kategori k ON k.id = p.kategori_id ORDER BY p.id DESC')->fetchAll();
+$kategoriList = kategori_all($pdo);
+$cari = trim((string) ($_GET['q'] ?? ''));
+$filterKategori = (int) ($_GET['kategori'] ?? 0);
+$filterStok = (string) ($_GET['stok'] ?? '');
+if (!in_array($filterStok, ['', 'tersedia', 'habis'], true)) {
+    $filterStok = '';
+}
 
-$judul = 'Kelola Produk | Admin Rerajut Thrift';
-$deskripsi = 'Kelola daftar produk Rerajut Thrift.';
+$where = [];
+$params = [];
+if ($cari !== '') {
+    $where[] = '(p.nama LIKE ? OR p.ukuran LIKE ?)';
+    $params[] = '%' . $cari . '%';
+    $params[] = '%' . $cari . '%';
+}
+if ($filterKategori > 0) {
+    $where[] = 'p.kategori_id = ?';
+    $params[] = $filterKategori;
+}
+if ($filterStok === 'tersedia') {
+    $where[] = 'p.stok > 0';
+} elseif ($filterStok === 'habis') {
+    $where[] = 'p.stok < 1';
+}
+$sqlWhere = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
+
+$perHal = 20;
+$stmtHitung = $pdo->prepare('SELECT COUNT(*) FROM produk p' . $sqlWhere);
+$stmtHitung->execute($params);
+$totalHasil = (int) $stmtHitung->fetchColumn();
+$totalHal = max(1, (int) ceil($totalHasil / $perHal));
+$hal = min($totalHal, max(1, (int) ($_GET['hal'] ?? 1)));
+$offset = ($hal - 1) * $perHal;
+
+$stmt = $pdo->prepare('SELECT p.*, k.nama AS kategori FROM produk p JOIN kategori k ON k.id = p.kategori_id' . $sqlWhere . ' ORDER BY p.id DESC LIMIT ' . $perHal . ' OFFSET ' . $offset);
+$stmt->execute($params);
+$produkList = $stmt->fetchAll();
+
+$judul = 'Kelola Produk | Admin ' . SITE_NAMA;
+$deskripsi = 'Kelola daftar produk ' . SITE_NAMA . '.';
 $kanonikal = SITE_URL . '/admin/produk.php';
 $robots = 'noindex, nofollow';
 $halaman = 'admin-produk';
@@ -51,8 +88,27 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
     <div class="admin-panel">
+      <form action="<?= e(BASE_URL) ?>/admin/produk.php" method="get" class="admin-filter">
+        <input type="search" name="q" value="<?= e($cari) ?>" placeholder="Cari nama atau ukuran produk">
+        <select name="kategori" aria-label="Filter kategori">
+          <option value="0">Semua kategori</option>
+          <?php foreach ($kategoriList as $kat): ?>
+          <option value="<?= (int) $kat['id'] ?>" <?= $filterKategori === (int) $kat['id'] ? 'selected' : '' ?>><?= e($kat['nama']) ?> (<?= (int) $kat['jumlah'] ?>)</option>
+          <?php endforeach; ?>
+        </select>
+        <select name="stok" aria-label="Filter stok">
+          <option value="">Semua stok</option>
+          <option value="tersedia" <?= $filterStok === 'tersedia' ? 'selected' : '' ?>>Tersedia</option>
+          <option value="habis" <?= $filterStok === 'habis' ? 'selected' : '' ?>>Terjual / Habis</option>
+        </select>
+        <button type="submit" class="tombol tombol-kecil">Filter</button>
+        <?php if ($cari !== '' || $filterKategori > 0 || $filterStok !== ''): ?>
+        <a class="tautan-lain" href="<?= e(BASE_URL) ?>/admin/produk.php">Reset</a>
+        <?php endif; ?>
+      </form>
+
       <?php if (!$produkList): ?>
-      <p>Belum ada produk. Tambahkan produk pertama melalui tombol tambah produk.</p>
+      <p><?= ($cari !== '' || $filterKategori > 0 || $filterStok !== '') ? 'Tidak ada produk yang cocok dengan filter.' : 'Belum ada produk. Tambahkan produk pertama melalui tombol tambah produk.' ?></p>
       <?php else: ?>
       <div class="tabel-gulir">
         <table class="tabel-admin">
@@ -95,6 +151,25 @@ require_once __DIR__ . '/../includes/header.php';
           </tbody>
         </table>
       </div>
+      <?php if ($totalHal > 1): ?>
+      <nav class="paginasi" aria-label="Navigasi halaman produk">
+        <?php for ($i = 1; $i <= $totalHal; $i++): ?>
+        <?php
+        $query = ['hal' => $i];
+        if ($cari !== '') {
+            $query['q'] = $cari;
+        }
+        if ($filterKategori > 0) {
+            $query['kategori'] = $filterKategori;
+        }
+        if ($filterStok !== '') {
+            $query['stok'] = $filterStok;
+        }
+        ?>
+        <a class="<?= $i === $hal ? 'aktif' : '' ?>" href="<?= e(BASE_URL) ?>/admin/produk.php?<?= e(http_build_query($query)) ?>"><?= $i ?></a>
+        <?php endfor; ?>
+      </nav>
+      <?php endif; ?>
       <?php endif; ?>
     </div>
   </div>

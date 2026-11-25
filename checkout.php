@@ -1,10 +1,20 @@
 <?php
 require_once __DIR__ . '/includes/fungsi.php';
 
-$items = keranjang_item($pdo);
+no_cache_headers();
+pesanan_batalkan_kedaluwarsa($pdo);
+
+$penyesuaianKeranjang = [];
+$items = keranjang_item($pdo, $penyesuaianKeranjang);
 if (!$items) {
-    flash_set('gagal', 'Keranjang masih kosong. Pilih produk terlebih dahulu.');
+    $pesanKosong = $penyesuaianKeranjang
+        ? implode(' ', $penyesuaianKeranjang)
+        : 'Keranjang masih kosong. Pilih produk terlebih dahulu.';
+    flash_set('gagal', $pesanKosong);
     redirect(BASE_URL . '/produk.php');
+}
+if ($penyesuaianKeranjang && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    flash_set('gagal', implode(' ', $penyesuaianKeranjang));
 }
 
 $subtotal = 0;
@@ -33,28 +43,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $galat[] = 'Sesi tidak valid. Silakan muat ulang halaman.';
     }
     foreach ($data as $kunci => $nilai) {
-        $data[$kunci] = trim($_POST[$kunci] ?? '');
+        $data[$kunci] = trim((string) ($_POST[$kunci] ?? ''));
     }
-    if (mb_strlen($data['nama']) < 3) {
-        $galat[] = 'Nama lengkap minimal 3 karakter.';
+    if (mb_strlen($data['nama']) < 3 || mb_strlen($data['nama']) > 120) {
+        $galat[] = 'Nama lengkap harus antara 3 sampai 120 karakter.';
     }
-    if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+    if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($data['email']) > 150) {
         $galat[] = 'Alamat email tidak valid.';
     }
-    if (mb_strlen(preg_replace('/[^0-9]/', '', $data['telepon'])) < 9) {
-        $galat[] = 'Nomor telepon minimal 9 digit.';
+    $digitTelepon = preg_replace('/[^0-9]/', '', $data['telepon']);
+    if (strlen($digitTelepon) < 9 || strlen($digitTelepon) > 15 || mb_strlen($data['telepon']) > 30) {
+        $galat[] = 'Nomor telepon harus terdiri dari 9 sampai 15 digit.';
     }
-    if (mb_strlen($data['alamat']) < 10) {
-        $galat[] = 'Alamat lengkap minimal 10 karakter.';
+    if (mb_strlen($data['alamat']) < 10 || mb_strlen($data['alamat']) > 1000) {
+        $galat[] = 'Alamat lengkap harus antara 10 sampai 1000 karakter.';
     }
-    if ($data['kota'] === '') {
-        $galat[] = 'Kota atau kabupaten wajib diisi.';
+    if ($data['kota'] === '' || mb_strlen($data['kota']) > 80) {
+        $galat[] = 'Kota atau kabupaten wajib diisi (maksimal 80 karakter).';
     }
-    if ($data['provinsi'] === '') {
-        $galat[] = 'Provinsi wajib diisi.';
+    if ($data['provinsi'] === '' || mb_strlen($data['provinsi']) > 80) {
+        $galat[] = 'Provinsi wajib diisi (maksimal 80 karakter).';
     }
     if (!preg_match('/^[0-9]{5}$/', $data['kode_pos'])) {
         $galat[] = 'Kode pos harus terdiri dari 5 angka.';
+    }
+    if (mb_strlen($data['catatan']) > 1000) {
+        $galat[] = 'Catatan maksimal 1000 karakter.';
     }
     if (!in_array($data['metode_bayar'], $metodeBayar, true)) {
         $galat[] = 'Metode pembayaran tidak valid.';
@@ -75,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $barisSubtotal = (int) $row['harga'] * (int) $item['jumlah'];
                 $subtotalDb += $barisSubtotal;
                 $itemDb[] = [
-                    'produk_id' => $row['id'],
+                    'produk_id' => (int) $row['id'],
                     'nama' => $row['nama'],
                     'ukuran' => $row['ukuran'],
                     'harga' => (int) $row['harga'],
@@ -85,7 +99,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $ongkirDb = ongkir_hitung($subtotalDb);
             $totalDb = $subtotalDb + $ongkirDb;
-            $kode = kode_pesanan();
+
+            $kode = '';
+            $stmtCekKode = $pdo->prepare('SELECT id FROM pesanan WHERE kode = ? LIMIT 1');
+            for ($coba = 0; $coba < 5; $coba++) {
+                $kandidat = kode_pesanan();
+                $stmtCekKode->execute([$kandidat]);
+                if (!$stmtCekKode->fetch()) {
+                    $kode = $kandidat;
+                    break;
+                }
+            }
+            if ($kode === '') {
+                throw new RuntimeException('Gagal membuat kode pesanan unik. Silakan coba lagi.');
+            }
+
             $statusAwal = $data['metode_bayar'] === 'COD' ? 'Diproses' : 'Menunggu Pembayaran';
             $batasBayar = $data['metode_bayar'] === 'COD' ? null : date('Y-m-d H:i:s', time() + 86400);
             $stmt = $pdo->prepare('INSERT INTO pesanan (kode, nama, email, telepon, alamat, kota, provinsi, kode_pos, catatan, metode_bayar, subtotal, ongkir, total, status, batas_bayar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -108,10 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $pesananId = (int) $pdo->lastInsertId();
             $stmtItem = $pdo->prepare('INSERT INTO pesanan_item (pesanan_id, produk_id, nama_produk, ukuran, harga, jumlah, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)');
-            $stmtStok = $pdo->prepare('UPDATE produk SET stok = stok - ? WHERE id = ?');
+            $stmtStok = $pdo->prepare('UPDATE produk SET stok = stok - ? WHERE id = ? AND stok >= ?');
             foreach ($itemDb as $item) {
+                $stmtStok->execute([$item['jumlah'], $item['produk_id'], $item['jumlah']]);
+                if ($stmtStok->rowCount() !== 1) {
+                    throw new RuntimeException('Stok produk ' . $item['nama'] . ' baru saja habis.');
+                }
                 $stmtItem->execute([$pesananId, $item['produk_id'], $item['nama'], $item['ukuran'], $item['harga'], $item['jumlah'], $item['subtotal']]);
-                $stmtStok->execute([$item['jumlah'], $item['produk_id']]);
             }
             $pdo->commit();
             keranjang_reset();
@@ -119,6 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
+            }
+            if (!($e instanceof RuntimeException)) {
+                error_log('[Rerajut Checkout Error] ' . $e->getMessage());
             }
             $galat[] = $e instanceof RuntimeException ? $e->getMessage() : 'Pesanan gagal diproses. Silakan coba lagi.';
         }

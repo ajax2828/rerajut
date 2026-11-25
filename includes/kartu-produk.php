@@ -11,7 +11,7 @@ $gambarProduk = BASE_URL . '/images/' . $produk['gambar'];
   <div class="kartu-isi">
     <p class="kartu-kategori"><?= e($produk['kategori']) ?> / <?= e($produk['kondisi']) ?></p>
     <h3><a href="<?= e(BASE_URL) ?>/detail.php?slug=<?= e($produk['slug']) ?>"><?= e($produk['nama']) ?></a></h3>
-    <p class="kartu-harga"><?= rupiah($produk['harga']) ?> <span><?= rupiah($produk['harga_asli']) ?></span></p>
+    <p class="kartu-harga"><?= rupiah($produk['harga']) ?><?php if ((int) $produk['harga_asli'] > (int) $produk['harga']): ?> <span><?= rupiah($produk['harga_asli']) ?></span><?php endif; ?></p>
     <p class="kartu-ukuran">Ukuran <?= e($produk['ukuran']) ?></p>
     <a class="tombol tombol-kecil" href="<?= e(BASE_URL) ?>/detail.php?slug=<?= e($produk['slug']) ?>">Lihat Produk</a>
   </div>

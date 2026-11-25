@@ -1,7 +1,10 @@
 <?php
 require_once __DIR__ . '/includes/fungsi.php';
 
-$kode = trim($_GET['kode'] ?? '');
+no_cache_headers();
+pesanan_batalkan_kedaluwarsa($pdo);
+
+$kode = trim((string) ($_GET['kode'] ?? ''));
 $pesanan = null;
 $itemPesanan = [];
 if ($kode !== '') {
@@ -15,8 +18,8 @@ if ($kode !== '') {
     }
 }
 
-$judul = $pesanan ? 'Pesanan ' . $pesanan['kode'] . ' Berhasil | Rerajut Thrift' : 'Pesanan Tidak Ditemukan | Rerajut Thrift';
-$deskripsi = 'Konfirmasi pesanan Rerajut Thrift beserta instruksi pembayaran.';
+$judul = $pesanan ? 'Pesanan ' . $pesanan['kode'] . ' Berhasil | ' . SITE_NAMA : 'Pesanan Tidak Ditemukan | ' . SITE_NAMA;
+$deskripsi = 'Konfirmasi pesanan ' . SITE_NAMA . ' beserta instruksi pembayaran.';
 $kanonikal = SITE_URL . '/pesanan-sukses.php';
 $halaman = 'pesanan';
 $robots = 'noindex, nofollow';
@@ -43,25 +46,39 @@ require_once __DIR__ . '/includes/header.php';
 <?php
 $metodeNonCod = in_array($pesanan['metode_bayar'], ['Transfer Bank', 'E-Wallet'], true);
 $lewatBatas = !empty($pesanan['batas_bayar']) && time() > strtotime($pesanan['batas_bayar']);
+$pesanStatusBukti = 'Pembayaran sedang diperiksa oleh admin.';
+if ($pesanan['status'] === 'Diproses') {
+    $pesanStatusBukti = 'Pembayaran telah dikonfirmasi dan pesanan sedang diproses.';
+} elseif ($pesanan['status'] === 'Dikirim') {
+    $pesanStatusBukti = 'Pembayaran telah dikonfirmasi dan pesanan sedang dalam pengiriman.';
+} elseif ($pesanan['status'] === 'Selesai') {
+    $pesanStatusBukti = 'Pembayaran telah dikonfirmasi dan pesanan telah selesai.';
+} elseif ($pesanan['status'] === 'Dibatalkan') {
+    $pesanStatusBukti = 'Pesanan ini telah dibatalkan.';
+}
 ?>
 <section class="bagian" data-simpan-pesanan="<?= e($pesanan['kode']) ?>">
   <div class="wadah sukses-grid">
     <div class="sukses-utama">
       <div class="kotak-info" id="pembayaran">
         <h2>Instruksi pembayaran</h2>
-        <?php if ($pesanan['metode_bayar'] === 'Transfer Bank'): ?>
+        <?php if ($pesanan['status'] === 'Dibatalkan'): ?>
+        <div class="kotak-galat">
+          <p>Pesanan ini telah dibatalkan. Jika kamu membutuhkan bantuan, silakan hubungi kami melalui halaman kontak dengan menyertakan kode pesanan.</p>
+        </div>
+        <?php elseif ($pesanan['metode_bayar'] === 'Transfer Bank'): ?>
         <p>Silakan transfer sebesar <strong><?= rupiah($pesanan['total']) ?></strong> ke rekening berikut.</p>
         <div class="rekening">
-          <p><span>Bank</span><strong>BCA</strong></p>
-          <p><span>Nomor rekening</span><strong>1234567890</strong></p>
-          <p><span>Atas nama</span><strong>Rerajut Thrift</strong></p>
+          <p><span>Bank</span><strong><?= e(BANK_NAMA) ?></strong></p>
+          <p><span>Nomor rekening</span><strong><?= e(BANK_REKENING) ?></strong></p>
+          <p><span>Atas nama</span><strong><?= e(BANK_ATAS_NAMA) ?></strong></p>
         </div>
         <?php elseif ($pesanan['metode_bayar'] === 'E-Wallet'): ?>
         <p>Silakan kirim pembayaran sebesar <strong><?= rupiah($pesanan['total']) ?></strong> ke akun e-wallet berikut.</p>
         <div class="rekening">
-          <p><span>Layanan</span><strong>GoPay, OVO, DANA</strong></p>
-          <p><span>Nomor</span><strong><?= e(SITE_TELEPON) ?></strong></p>
-          <p><span>Atas nama</span><strong>Rerajut Thrift</strong></p>
+          <p><span>Layanan</span><strong><?= e(EWALLET_NAMA) ?></strong></p>
+          <p><span>Nomor</span><strong><?= e(EWALLET_NOMOR) ?></strong></p>
+          <p><span>Atas nama</span><strong><?= e(EWALLET_ATAS_NAMA) ?></strong></p>
         </div>
         <?php else: ?>
         <p>Pesananmu menggunakan metode bayar di tempat. Siapkan uang tunai sebesar <strong><?= rupiah($pesanan['total']) ?></strong> saat kurir tiba.</p>
@@ -69,14 +86,14 @@ $lewatBatas = !empty($pesanan['batas_bayar']) && time() > strtotime($pesanan['ba
         <?php endif; ?>
 
         <?php if ($metodeNonCod): ?>
-        <?php if ($pesanan['batas_bayar']): ?>
-        <p class="batas-bayar">Batas upload bukti pembayaran: <strong><?= date('d-m-Y H:i', strtotime($pesanan['batas_bayar'])) ?> WIB</strong></p>
+        <?php if (!empty($pesanan['batas_bayar']) && $pesanan['status'] === 'Menunggu Pembayaran'): ?>
+        <p class="batas-bayar">Batas upload bukti pembayaran: <strong><?= e(tanggal_wib($pesanan['batas_bayar'])) ?></strong></p>
         <?php endif; ?>
 
-        <?php if ($pesanan['bukti_bayar']): ?>
+        <?php if (!empty($pesanan['bukti_bayar'])): ?>
         <div class="bukti-terunggah">
           <h3>Bukti pembayaran sudah diunggah</h3>
-          <p>Diunggah pada <?= date('d-m-Y H:i', strtotime($pesanan['dibayar_pada'])) ?> WIB. Pembayaran sedang diperiksa oleh admin.</p>
+          <p><?php if (!empty($pesanan['dibayar_pada'])): ?>Diunggah pada <?= e(tanggal_wib($pesanan['dibayar_pada'])) ?>. <?php endif; ?><?= e($pesanStatusBukti) ?></p>
           <a href="<?= e(BASE_URL) ?>/uploads/bukti/<?= e($pesanan['bukti_bayar']) ?>" target="_blank" rel="noopener">
             <img src="<?= e(BASE_URL) ?>/uploads/bukti/<?= e($pesanan['bukti_bayar']) ?>" alt="Bukti pembayaran <?= e($pesanan['kode']) ?>" width="220" height="293">
           </a>
@@ -137,7 +154,7 @@ $lewatBatas = !empty($pesanan['batas_bayar']) && time() > strtotime($pesanan['ba
       <p><?= nl2br(e($pesanan['alamat'])) ?><br><?= e($pesanan['kota']) ?>, <?= e($pesanan['provinsi']) ?> <?= e($pesanan['kode_pos']) ?></p>
       <p><span>Metode bayar</span><br><strong><?= e($pesanan['metode_bayar']) ?></strong></p>
       <p><span>Status</span><br><strong><?= e($pesanan['status']) ?></strong></p>
-      <p><span>Tanggal pesanan</span><br><?= date('d-m-Y H:i', strtotime($pesanan['dibuat_pada'])) ?> WIB</p>
+      <p><span>Tanggal pesanan</span><br><?= e(tanggal_wib($pesanan['dibuat_pada'])) ?></p>
       <a class="tombol tombol-lebar" href="<?= e(BASE_URL) ?>/lacak.php?kode=<?= e($pesanan['kode']) ?>">Lacak Pesanan</a>
       <a class="tombol tombol-lebar tombol-garis tombol-jarak" href="<?= e(BASE_URL) ?>/pesanan-saya.php">Pesanan Saya</a>
       <p class="ringkasan-catatan">Kode pesanan juga tersimpan otomatis di perangkat ini melalui halaman Pesanan Saya.</p>
