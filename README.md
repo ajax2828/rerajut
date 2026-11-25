@@ -1,6 +1,6 @@
-# Rerajut Thrift (Laravel 11)
+# Rerajut Thrift (Laravel 12)
 
-Aplikasi web toko baju thrift **Rerajut Thrift** berbasis **Laravel 11** & MySQL, siap dideploy ke container/PaaS Laravel, VPS (Apache/Nginx + PHP-FPM), maupun lokal.
+Aplikasi web toko baju thrift **Rerajut Thrift** berbasis **Laravel 12** & MySQL, siap dideploy ke container/PaaS Laravel, VPS (Apache/Nginx + PHP-FPM), maupun lokal.
 
 ## Persyaratan Server
 - PHP 8.2+ (`pdo_mysql`, `mbstring`, `openssl`, `fileinfo`, `ctype`, `json`, `tokenizer`, `xml`)
