@@ -1,38 +1,34 @@
 # Rerajut Thrift
 
-Aplikasi web toko baju thrift berbasis PHP & MySQL (PDO) tanpa framework berat, siap dijalankan di shared hosting (cPanel/Apache), VPS (Apache/Nginx + PHP-FPM), maupun lokal.
+Aplikasi web toko baju thrift berbasis **PHP Native** & MySQL (PDO) — **bukan Laravel** — siap dijalankan di shared hosting (cPanel/Apache), VPS (Apache/Nginx + PHP-FPM), container/PaaS, maupun lokal.
 
 ## Persyaratan Server
 - PHP 7.4 atau 8.x (`pdo_mysql`, `json`, `fileinfo` disarankan, `mbstring` disarankan)
 - MySQL 5.7+ / MySQL 8.0+ atau MariaDB 10.3+
 - Apache (`mod_rewrite`, `mod_headers` disarankan) atau Nginx + PHP-FPM
+- **Catatan Panel/Container Deploy:** Pilih runtime **PHP Native / PHP** (dengan document root `/`, **bukan** preset Laravel dan **bukan** `/public`), karena proyek ini tidak menggunakan Laravel (`artisan` / `APP_KEY`).
 
 ## Cara Deploy ke Server
 
 ### 1. Siapkan Database
-1. Buat database baru (misalnya `rerajut_thrift`) di MySQL / phpMyAdmin / cPanel.
+1. Buat database baru (misalnya `rerajut_thrift`) di MySQL / phpMyAdmin / panel server.
 2. Import file `rerajut_thrift.sql` ke database tersebut.
 
-### 2. Konfigurasi `.env`
-Salin `.env.example` menjadi `.env` lalu sesuaikan kredensial database dan info toko:
+### 2. Konfigurasi Environment
+Anda dapat mengisi environment variables langsung melalui panel container/server **atau** menyalin `config/env.sample` menjadi `.env`:
 
 ```bash
-cp .env.example .env
+cp config/env.sample .env
 ```
 
-Isi minimal konfigurasi database di `.env`:
-```env
-APP_DEBUG=false
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=nama_database_server
-DB_USER=user_database_server
-DB_PASS=password_database_server
-```
+Aplikasi otomatis mengenali format environment berikut:
+- PHP Native: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`
+- Standar Laravel/PaaS: `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
+- Standar Docker/MySQL: `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` atau `DATABASE_URL`
 
 Catatan:
 - `BASE_URL` dan `SITE_URL` terdeteksi otomatis baik saat dijalankan di root domain (`https://domainanda.com/`) maupun subfolder (`https://domainanda.com/triftweb/`).
-- Jika di belakang reverse proxy khusus, Anda bisa mengisi `APP_URL=https://domainanda.com` dan `APP_BASE_URL=/` (atau `/subfolder`) di `.env`.
+- Jika di belakang reverse proxy khusus, Anda bisa mengisi `APP_URL=https://domainanda.com` dan `APP_BASE_URL=/` (atau `/subfolder`).
 
 ### 3. Izin Folder Upload (Linux / VPS)
 Pastikan web server memiliki izin tulis pada folder `uploads/bukti` dan `images`:
@@ -52,7 +48,7 @@ location ~ /\.(?!well-known) {
     deny all;
 }
 
-location ~* \.(sql|env|log|bak|ini|sh|md)$ {
+location ~* \.(sql|env|log|bak|ini|sh|md|sample)$ {
     deny all;
 }
 

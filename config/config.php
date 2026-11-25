@@ -18,6 +18,9 @@ if (!function_exists('rerajut_load_env')) {
             if ($line === '' || $line[0] === '#') {
                 continue;
             }
+            if (strpos($line, 'export ') === 0) {
+                $line = trim(substr($line, 7));
+            }
             $pos = strpos($line, '=');
             if ($pos === false) {
                 continue;
@@ -72,6 +75,7 @@ if (!function_exists('env_bool')) {
 }
 
 rerajut_load_env(__DIR__ . '/../.env');
+rerajut_load_env(__DIR__ . '/.env');
 
 $appDebug = env_bool('APP_DEBUG', false);
 define('APP_DEBUG', $appDebug);

@@ -1,13 +1,66 @@
 <?php
 require_once __DIR__ . '/config.php';
 
-$dbHost = (string) env_val('DB_HOST', 'localhost');
-$dbPort = (string) env_val('DB_PORT', '3306');
-$dbName = (string) env_val('DB_NAME', 'rerajut_thrift');
-$dbUser = (string) env_val('DB_USER', 'root');
-$dbPass = (string) env_val('DB_PASS', '');
-$dbCharset = (string) env_val('DB_CHARSET', 'utf8mb4');
-$dbSocket = trim((string) env_val('DB_SOCKET', ''));
+if (!function_exists('env_first')) {
+    function env_first(array $keys, $default = '') {
+        foreach ($keys as $key) {
+            $val = env_val($key, null);
+            if ($val !== null && $val !== '') {
+                return (string) $val;
+            }
+        }
+        return (string) $default;
+    }
+}
+
+$dbHost = '';
+$dbPort = '';
+$dbName = '';
+$dbUser = '';
+$dbPass = null;
+
+// Mendukung DATABASE_URL / MYSQL_URL (format mysql://user:pass@host:port/dbname)
+$dbUrl = env_first(['DATABASE_URL', 'MYSQL_URL'], '');
+if ($dbUrl !== '') {
+    $parsed = parse_url($dbUrl);
+    if (is_array($parsed)) {
+        if (!empty($parsed['host'])) {
+            $dbHost = (string) $parsed['host'];
+        }
+        if (!empty($parsed['port'])) {
+            $dbPort = (string) $parsed['port'];
+        }
+        if (!empty($parsed['path'])) {
+            $dbName = ltrim((string) $parsed['path'], '/');
+        }
+        if (isset($parsed['user'])) {
+            $dbUser = rawurldecode((string) $parsed['user']);
+        }
+        if (isset($parsed['pass'])) {
+            $dbPass = rawurldecode((string) $parsed['pass']);
+        }
+    }
+}
+
+// Mendukung penamaan standar PHP Native, Laravel (DB_DATABASE/DB_USERNAME/DB_PASSWORD), dan Docker/MySQL
+$dbHost = env_first(['DB_HOST', 'MYSQL_HOST', 'MYSQLHOST'], $dbHost !== '' ? $dbHost : 'localhost');
+$dbPort = env_first(['DB_PORT', 'MYSQL_PORT', 'MYSQLPORT'], $dbPort !== '' ? $dbPort : '3306');
+$dbName = env_first(['DB_NAME', 'DB_DATABASE', 'MYSQL_DATABASE', 'MYSQLDATABASE'], $dbName !== '' ? $dbName : 'rerajut_thrift');
+$dbUser = env_first(['DB_USER', 'DB_USERNAME', 'MYSQL_USER', 'MYSQLUSER'], $dbUser !== '' ? $dbUser : 'root');
+
+foreach (['DB_PASS', 'DB_PASSWORD', 'MYSQL_PASSWORD', 'MYSQLPASSWORD'] as $passKey) {
+    $val = env_val($passKey, null);
+    if ($val !== null) {
+        $dbPass = (string) $val;
+        break;
+    }
+}
+if ($dbPass === null) {
+    $dbPass = '';
+}
+
+$dbCharset = env_first(['DB_CHARSET'], 'utf8mb4');
+$dbSocket = trim(env_first(['DB_SOCKET'], ''));
 
 if (!preg_match('/^[0-9]+$/', $dbPort)) {
     $dbPort = '3306';
@@ -44,7 +97,7 @@ try {
     }
 
     header('Content-Type: text/plain; charset=utf-8');
-    $pesan = 'Koneksi database gagal. Pastikan layanan MySQL aktif dan konfigurasi file .env sudah sesuai.';
+    $pesan = 'Koneksi database gagal. Pastikan layanan MySQL aktif dan konfigurasi environment database sudah sesuai.';
     if (APP_DEBUG) {
         $pesan .= "\nDetail: " . $e->getMessage();
     }

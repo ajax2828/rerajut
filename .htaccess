@@ -2,7 +2,7 @@ DirectoryIndex index.php
 Options -Indexes
 
 # Lindungi file sensitif (env, sql, git, log, backup)
-<FilesMatch "(^\.|\.(sql|env|log|bak|ini|sh|md|gitignore|gitkeep)$)">
+<FilesMatch "(^\.|\.(sql|env|log|bak|ini|sh|md|sample|gitignore|gitkeep)$)">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>
