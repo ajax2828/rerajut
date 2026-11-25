@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /keranjang.php
+Disallow: /checkout.php
+Disallow: /pesanan-sukses.php
+Disallow: /lacak.php
+Disallow: /pesanan-saya.php
+Disallow: /api-pesanan.php
+Disallow: /uploads/
+Disallow: /config/
+Disallow: /includes/
+Disallow: /database/
+Disallow: /admin/
+
+Sitemap: http://localhost/triftweb/sitemap.php
